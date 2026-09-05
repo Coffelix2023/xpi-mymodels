@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { openModelConfig } from "./ui.ts";
+import { openGlimpseModelConfig } from "./glimpse.ts";
 
 const VERSION = "0.1.0";
 
@@ -12,7 +12,7 @@ export default function xpiMymodels(pi: ExtensionAPI): void {
         return;
       }
       try {
-        await openModelConfig(ctx);
+        await openGlimpseModelConfig();
       } catch (error) {
         ctx.ui.notify(
           `xpi-mymodels failed: ${error instanceof Error ? error.message : String(error)}`,

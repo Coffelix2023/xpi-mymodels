@@ -5,12 +5,14 @@ import { describe, expect, it } from "vitest";
 import {
   estimateCost,
   getEnabledModels,
+  type JsonObject,
   listProviderDrafts,
   modelReference,
   readJsonc,
   saveModelsAndSettings,
   setEnabledModels,
   toUsd,
+  updateEnabledModelReference,
   upsertProvider,
   validateModelsConfig,
 } from "../src/models.ts";
@@ -40,7 +42,7 @@ describe("model configuration data", () => {
   });
 
   it("keeps quick-cycle patterns separate from model availability", () => {
-    const settings: Record<string, unknown> = {};
+    const settings: JsonObject = {};
     setEnabledModels(settings, [
       "local/qwen",
       "cloud/*",
@@ -51,6 +53,149 @@ describe("model configuration data", () => {
       "cloud/*",
     ]);
     expect(settings).not.toHaveProperty("providers");
+  });
+  it("migrates and removes exact enabled model references", () => {
+    const settings = {
+      theme: "dark",
+      enabledModels: [
+        "local/qwen",
+        "local/*",
+        "other/qwen",
+      ],
+      nested: {
+        keep: true,
+      },
+    };
+
+    updateEnabledModelReference(settings, "local/qwen", "local/qwen3");
+    expect(settings).toEqual({
+      theme: "dark",
+      enabledModels: [
+        "local/qwen3",
+        "local/*",
+        "other/qwen",
+      ],
+      nested: {
+        keep: true,
+      },
+    });
+
+    updateEnabledModelReference(settings, "local/qwen3");
+    expect(settings).toEqual({
+      theme: "dark",
+      enabledModels: [
+        "local/*",
+        "other/qwen",
+      ],
+      nested: {
+        keep: true,
+      },
+    });
+  });
+
+  it("applies safe defaults when core model fields are absent", () => {
+    const [provider] = listProviderDrafts({
+      providers: {
+        local: {
+          models: [
+            {
+              id: "qwen",
+            },
+          ],
+        },
+      },
+    });
+    const [model] = provider.models;
+
+    expect(model).toMatchObject({
+      contextWindow: 128_000,
+      maxTokens: 16_384,
+      name: "qwen",
+      reasoning: false,
+      cost: {
+        cacheRead: 0,
+        cacheWrite: 0,
+        input: 0,
+        output: 0,
+      },
+      input: [
+        "text",
+      ],
+    });
+    expect(model).not.toHaveProperty("apiKey");
+  });
+
+  it("rejects duplicate model ids and invalid numeric fields", () => {
+    expect(
+      validateModelsConfig({
+        providers: {
+          local: {
+            models: [
+              {
+                contextWindow: 0,
+                id: "qwen",
+              },
+              {
+                id: "qwen",
+                cost: {
+                  input: -1,
+                },
+              },
+            ],
+          },
+        },
+      }),
+    ).toEqual([
+      "providers.local.models.0.contextWindow must be a positive number",
+      "providers.local.models.1.cost.input must be a non-negative number",
+      "providers.local.models.1.id must be unique within provider",
+    ]);
+  });
+
+  it("preserves unknown fields while keeping secrets out of validation errors", () => {
+    const config: JsonObject = {
+      providers: {
+        local: {
+          apiKey: "super-secret",
+          models: [
+            {
+              id: "qwen",
+              vendorField: "keep-me",
+              samplingParams: {
+                temperature: 0.2,
+              },
+            },
+          ],
+        },
+      },
+    };
+    const [provider] = listProviderDrafts(config);
+    upsertProvider(config, {
+      ...provider,
+      models: [
+        {
+          ...provider.models[0],
+          name: "Qwen 3",
+        },
+      ],
+    });
+
+    expect(config.providers).toMatchObject({
+      local: {
+        apiKey: "super-secret",
+        models: [
+          expect.objectContaining({
+            id: "qwen",
+            name: "Qwen 3",
+            vendorField: "keep-me",
+            samplingParams: {
+              temperature: 0.2,
+            },
+          }),
+        ],
+      },
+    });
+    expect(validateModelsConfig(config)).not.toContain("super-secret");
   });
 
   it("normalizes a CNY pricing input (72.4 CNY at fixed 7.24) to 10 USD per 1M tokens", () => {
