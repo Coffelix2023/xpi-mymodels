@@ -138,8 +138,17 @@ export function validateModelsConfig(value: JsonObject): string[] {
       if (!Array.isArray(rawProvider.models)) {
         errors.push(`providers.${providerId}.models must be an array`);
       } else {
+        const modelIds = new Set<string>();
         rawProvider.models.forEach((model, index) => {
           validateModel(model, `providers.${providerId}.models.${index}`, errors);
+          if (!isObject(model) || !isNonEmptyString(model.id)) return;
+          if (modelIds.has(model.id)) {
+            errors.push(
+              `providers.${providerId}.models.${index}.id must be unique within provider`,
+            );
+          } else {
+            modelIds.add(model.id);
+          }
         });
       }
     }
@@ -400,6 +409,34 @@ export function getEnabledModels(settings: JsonObject): string[] {
   return Array.isArray(settings.enabledModels)
     ? settings.enabledModels.filter((item): item is string => typeof item === "string")
     : [];
+}
+
+export function updateEnabledModelReference(
+  settings: JsonObject,
+  previousReference: string,
+  nextReference?: string,
+): void {
+  if (previousReference === nextReference) return;
+
+  const patterns = getEnabledModels(settings);
+  if (!patterns.includes(previousReference)) return;
+
+  const targetAlreadyExists =
+    nextReference !== undefined && patterns.includes(nextReference);
+  let replacementAdded = false;
+  const updated = patterns.flatMap((pattern) => {
+    if (pattern !== previousReference)
+      return [
+        pattern,
+      ];
+    if (nextReference === undefined || targetAlreadyExists || replacementAdded)
+      return [];
+    replacementAdded = true;
+    return [
+      nextReference,
+    ];
+  });
+  setEnabledModels(settings, updated);
 }
 
 export function modelReference(providerId: string, modelId: string): string {
