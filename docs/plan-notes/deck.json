@@ -1,0 +1,156 @@
+{
+  "config": {
+    "title": "xpi-mymodels · Pi 模型配置台",
+    "slides": [
+      {
+        "id": "persistence",
+        "title": "配置如何进入 Pi",
+        "context": "目标是替代手动编辑 ~/.pi/agent/models.json，并让保存后的模型在当前会话中可发现。",
+        "options": [
+          {
+            "label": "文件优先",
+            "description": "校验后原子写入 models.json，再让用户重新打开模型选择器。",
+            "aside": "实现最少，重启行为稳定。当前会话刷新需要明确提示。",
+            "recommended": true,
+            "previewBlocks": [
+              {
+                "type": "mermaid",
+                "content": "flowchart LR\n UI[TUI]-->V[Validate]\n V-->W[Atomic models.json]\n W-->P[/model reload]\n V--invalid-->E[Inline error]"
+              },
+              {
+                "type": "code",
+                "code": "const next = validate(draft);\nawait atomicWrite(modelsPath, next);\nctx.ui.notify(\"Saved. Reopen /model to refresh.\");",
+                "lang": "ts"
+              }
+            ]
+          },
+          {
+            "label": "运行时优先",
+            "description": "保存时调用 pi.registerProvider，另存扩展配置。",
+            "aside": "当前会话立即生效。会产生第二份配置真相，不符合本项目核心目标。",
+            "previewBlocks": [
+              {
+                "type": "mermaid",
+                "content": "flowchart LR\n UI-->R[registerProvider]\n R-->L[Live session]\n UI-->S[Extension state]\n S-->D[Drift after restart]"
+              },
+              {
+                "type": "code",
+                "code": "pi.registerProvider(providerId, { baseUrl, api, models });\n// models.json remains untouched",
+                "lang": "ts"
+              }
+            ]
+          },
+          {
+            "label": "事务混合",
+            "description": "models.json 是唯一持久化源，成功写入后同步当前运行时。",
+            "aside": "同时满足重启可靠性和即时反馈。需要备份、写入失败回滚与运行时同步错误处理。",
+            "previewBlocks": [
+              {
+                "type": "mermaid",
+                "content": "sequenceDiagram\n U->>C: edit draft\n C->>C: validate + backup\n C->>C: atomic write\n C->>P: update runtime\n P-->>U: available now"
+              },
+              {
+                "type": "code",
+                "code": "const snapshot = await backupModelsJson();\nconst next = validate(draft);\nawait atomicWriteModelsJson(next);\napplyRuntimeProvider(pi, next);",
+                "lang": "ts"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "form",
+        "title": "字段开放与首屏信息量",
+        "context": "Pi 的 Provider/Model 字段包含 API、能力、思考等级、采样、兼容性和价格。默认全部可配置，但首屏必须能扫描。",
+        "options": [
+          {
+            "label": "分组折叠",
+            "description": "基础字段默认展开，其余按 Models、Thinking、Sampling、Pricing、Compatibility 折叠。",
+            "aside": "常用路径短，完整能力不丢。最符合原生 TUI 的纵向滚动。",
+            "recommended": true,
+            "previewHtml": "<div style='background:#1e1e1e;color:#d4d4d4;padding:16px;font:12px monospace;line-height:1.5'><b style='color:#4ec9b0'>MODEL CONFIG</b><div style='border:1px solid #3c3c3c;padding:10px;margin-top:12px'><b style='color:#4ec9b0'>▼ BASIC</b><div style='margin-top:8px;color:#808080'>baseUrl <span style='color:#d4d4d4'>http://.../v1</span></div><div style='color:#808080'>api <span style='color:#3b82f6'>openai-responses ▾</span></div></div><div style='border:1px solid #3c3c3c;padding:10px;margin-top:8px;color:#4d9375'>▶ MODELS · 28</div><div style='border:1px solid #3c3c3c;padding:10px;margin-top:8px;color:#4d9375'>▶ THINKING / COMPATIBILITY</div><div style='border:1px solid #3c3c3c;padding:10px;margin-top:8px;color:#4d9375'>▶ SAMPLING / PRICING</div><div style='color:#808080;margin-top:12px'>↑↓ move · Enter expand · Ctrl+S save</div></div>"
+          },
+          {
+            "label": "全部字段表",
+            "description": "以字段网格展示所有 Provider 和 Model 字段，空值和默认值也可见。",
+            "aside": "专家用户发现字段最快。新用户需要承担更高的滚动和判断成本。",
+            "previewHtml": "<div style='background:#1e1e1e;color:#d4d4d4;padding:16px;font:11px monospace'><b>EDIT PROVIDER</b><span style='float:right;color:#4ec9b0'>28 fields</span><div style='border:1px solid #3c3c3c;margin-top:12px;display:grid;grid-template-columns:1fr 1.2fr .6fr'><span style='padding:7px;color:#808080'>FIELD</span><span style='padding:7px;color:#808080'>VALUE</span><span style='padding:7px;color:#808080'>SCOPE</span><span style='padding:7px'>baseUrl</span><span style='padding:7px;color:#3b82f6'>http://.../v1</span><span style='padding:7px;color:#808080'>provider</span><span style='padding:7px'>cost.input</span><span style='padding:7px'>$0.60</span><span style='padding:7px;color:#808080'>model</span></div></div>"
+          },
+          {
+            "label": "模板起步",
+            "description": "新建时先选 OpenAI-compatible、Anthropic、Google 或 Local 模板，再进入完整表单。",
+            "aside": "新用户最快。模板只能提供默认值，不能隐藏高级字段。",
+            "previewHtml": "<div style='background:#1e1e1e;color:#d4d4d4;padding:16px;font:12px monospace'><div style='color:#808080'>NEW PROVIDER / STARTING POINT</div><div style='display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px'><div style='border:1px solid #3b82f6;padding:12px'><b style='color:#3b82f6'>OpenAI-compatible</b><div style='color:#808080;margin-top:6px'>completions / responses</div></div><div style='border:1px solid #3c3c3c;padding:12px'><b>Anthropic</b><div style='color:#808080;margin-top:6px'>messages + cache</div></div><div style='border:1px solid #3c3c3c;padding:12px'><b>Google</b><div style='color:#808080;margin-top:6px'>text + image</div></div><div style='border:1px solid #3c3c3c;padding:12px'><b>Local</b><div style='color:#808080;margin-top:6px'>Ollama / vLLM</div></div></div><div style='color:#4ec9b0;margin-top:14px'>→ Continue to full configuration</div></div>"
+          }
+        ]
+      },
+      {
+        "id": "cycle",
+        "title": "Ctrl+P 快切集合",
+        "context": "快切集合只控制 Ctrl+P / Shift+Ctrl+P 循环顺序，不是模型白名单。模型可用性与循环资格必须视觉上分离。",
+        "options": [
+          {
+            "label": "独立循环列表",
+            "description": "左侧模型总表，右侧维护循环列表和明确顺序。",
+            "aside": "语义最清楚，排序就是循环顺序。适合高频切换。",
+            "recommended": true,
+            "previewHtml": "<div style='background:#1e1e1e;color:#d4d4d4;padding:16px;font:11px monospace;display:grid;grid-template-columns:1fr 1fr;gap:12px'><div><div style='color:#808080'>AVAILABLE · 9</div><div style='border:1px solid #3c3c3c;margin-top:8px'><div style='padding:9px;color:#4ec9b0;background:#252526'>● combo-gpt5.6-sol</div><div style='padding:9px;border-top:1px solid #3c3c3c'>○ combo-claude-opus5</div><div style='padding:9px;border-top:1px solid #3c3c3c'>○ combo-deepseek</div></div></div><div><div style='color:#808080'>CTRL+P CYCLE · 3</div><div style='border:1px solid #4d9375;margin-top:8px'><div style='padding:9px'>1 combo-gpt5.6-sol</div><div style='padding:9px;border-top:1px solid #3c3c3c'>2 combo-claude-opus5</div><div style='padding:9px;border-top:1px solid #3c3c3c'>3 combo-deepseek</div></div><div style='color:#808080;margin-top:8px'>Space add · ↑↓ reorder</div></div></div>"
+          },
+          {
+            "label": "表格双列",
+            "description": "模型表同时显示 Enabled 和 Ctrl+P 两列，单页完成管理。",
+            "aside": "批量效率高。列标题必须反复强调 Ctrl+P 不会禁用模型。",
+            "previewHtml": "<div style='background:#1e1e1e;color:#d4d4d4;padding:16px;font:11px monospace'><div style='color:#808080'>MODEL CATALOG</div><div style='border:1px solid #3c3c3c;margin-top:8px;display:grid;grid-template-columns:1fr 55px 65px'><span style='padding:8px;color:#808080'>MODEL</span><span style='padding:8px;color:#808080'>USE</span><span style='padding:8px;color:#808080'>CTRL+P</span><span style='padding:10px;background:#252526'>combo-gpt5.6-sol</span><span style='padding:10px;background:#252526;color:#4ec9b0'>✓</span><span style='padding:10px;background:#252526;color:#4ec9b0'>✓ 1</span><span style='padding:10px'>advisor-gpt</span><span style='padding:10px;color:#4ec9b0'>✓</span><span style='padding:10px;color:#808080'>—</span></div><div style='color:#808080;margin-top:10px'>USE = available · CTRL+P = cycling only</div></div>"
+          },
+          {
+            "label": "快切预设",
+            "description": "按 Coding、Fast、Reasoning 等预设组织循环集合，当前预设决定 Ctrl+P 顺序。",
+            "aside": "适合模型很多且按任务切换的人。引入预设和标签，维护成本最高。",
+            "previewHtml": "<div style='background:#1e1e1e;color:#d4d4d4;padding:16px;font:11px monospace'><div style='color:#808080'>QUICK PROFILES</div><div style='display:flex;gap:6px;margin:10px 0'><span style='background:#3b82f6;color:#fff;padding:7px'>CODING</span><span style='border:1px solid #3c3c3c;padding:7px'>FAST</span><span style='border:1px solid #3c3c3c;padding:7px'>REASONING</span></div><div style='border:1px solid #3c3c3c;padding:10px'><div style='color:#4ec9b0'>Ctrl+P → CODING · 4 models</div><div style='color:#808080;margin-top:8px'>01 combo-gpt5.6-sol</div><div style='color:#808080'>02 combo-claude-opus5</div><div style='color:#808080'>03 combo-deepseek</div></div><div style='color:#808080;margin-top:10px'>Profiles are not availability filters.</div></div>"
+          }
+        ]
+      },
+      {
+        "id": "pricing-test",
+        "title": "价格与连接测试",
+        "context": "Pi 使用 input、output、cacheRead、cacheWrite 四类每百万 token 费率；连接测试需要显示毫秒级耗时且不泄露密钥或上下文。",
+        "options": [
+          {
+            "label": "USD/CNY 归一",
+            "description": "界面可切 USD 或 CNY，保存时统一换算成 Pi 识别的 USD 费率。",
+            "aside": "与 Pi 原生费用统计直接兼容。需要保存汇率快照和来源。",
+            "recommended": true,
+            "previewHtml": "<div style='background:#1e1e1e;color:#d4d4d4;padding:16px;font:11px monospace'><b>PRICING / MODEL</b><div style='margin-top:12px;display:grid;grid-template-columns:1fr 100px;gap:7px'><span style='color:#808080'>input / 1M</span><span style='border:1px solid #3c3c3c;padding:7px'>$0.600</span><span style='color:#808080'>output / 1M</span><span style='border:1px solid #3c3c3c;padding:7px'>$3.000</span><span style='color:#808080'>cache read / 1M</span><span style='border:1px solid #3c3c3c;padding:7px'>$0.060</span><span style='color:#808080'>cache write / 1M</span><span style='border:1px solid #3c3c3c;padding:7px'>$0.750</span></div><div style='color:#4d9375;margin-top:12px'>saved as USD · Pi cost enabled</div></div>"
+          },
+          {
+            "label": "双币矩阵",
+            "description": "同时显示 USD 和 CNY 两套四项费率，并指定 USD 为 Pi 计算基准。",
+            "aside": "账单核对直观。models.json 没有币种字段，额外元数据会增加复杂度。",
+            "previewHtml": "<div style='background:#1e1e1e;color:#d4d4d4;padding:16px;font:11px monospace'><div style='color:#808080'>COST MATRIX / PER 1M</div><div style='display:grid;grid-template-columns:1.2fr 1fr 1fr;border:1px solid #3c3c3c;margin-top:10px'><span style='padding:8px;color:#808080'>RATE</span><span style='padding:8px;color:#3b82f6'>USD</span><span style='padding:8px;color:#ce9178'>CNY</span><span style='padding:8px'>input</span><span style='padding:8px'>$0.60</span><span style='padding:8px'>¥4.34</span><span style='padding:8px'>output</span><span style='padding:8px'>$3.00</span><span style='padding:8px'>¥21.72</span><span style='padding:8px'>cache read</span><span style='padding:8px'>$0.06</span><span style='padding:8px'>¥0.43</span></div><div style='color:#808080;margin-top:10px'>Pi billing base: USD</div></div>"
+          },
+          {
+            "label": "费率预览 + 测试",
+            "description": "价格区提供示例 token 费用预览；模型行提供最小推理测试并记录 endpoint/inference 延迟。",
+            "aside": "能同时发现单位错误和连接问题。功能完整，但状态处理最多。",
+            "previewHtml": "<div style='background:#1e1e1e;color:#d4d4d4;padding:16px;font:11px monospace'><div style='color:#808080'>MODEL CHECK / combo-gpt5.6-sol</div><div style='display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px'><div style='border:1px solid #3c3c3c;padding:10px'><div style='color:#808080'>SAMPLE COST</div><div style='color:#4ec9b0;font-size:18px;margin-top:8px'>$0.00054</div><div style='color:#808080'>12K in · 2.4K out · 38K cache read</div></div><div style='border:1px solid #4d9375;padding:10px'><div style='color:#4d9375'>CONNECTION</div><div style='margin-top:8px'>endpoint <b>84 ms</b></div><div>inference <b style='color:#4ec9b0'>184 ms</b></div><div style='color:#808080;margin-top:7px'>fixed probe · output discarded</div></div></div></div>"
+          }
+        ]
+      }
+    ]
+  },
+  "selections": {
+    "persistence": "文件优先",
+    "form": "分组折叠",
+    "cycle": "独立循环列表",
+    "pricing-test": "USD/CNY 归一"
+  },
+  "savedAt": "2026-09-05T06:58:30.107Z",
+  "id": "xpi-mymodels___Pi-xpi-mymodels-main-2026-09-05-145830-submitted",
+  "status": "submitted",
+  "modifiedAt": "2026-09-05T06:58:30.107Z",
+  "savedFrom": {
+    "cwd": "~/c6x_local/app-prd/xpi-mymodels",
+    "branch": "main",
+    "sessionId": "7bc183bd-5610-4992-9dac-946f31566770"
+  }
+}
