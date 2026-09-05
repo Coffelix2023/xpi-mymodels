@@ -1,0 +1,226 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+
+  /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ Assist
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "recommended": true,
+      "source": {
+        "noDuplicateClasses": "on",
+        "organizeImports": "on",
+        "recommended": true,
+        "useSortedAttributes": "on",
+        "useSortedInterfaceMembers": "on",
+        "useSortedProperties": "on",
+        "useSortedKeys": {
+          "level": "on",
+          "options": {
+            "groupByNesting": true, //按嵌套排序
+            "sortOrder": "natural" //按字母排序
+          }
+        }
+      }
+    }
+  },
+
+  /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ CSS - 配置
+  "css": {
+    "assist": {
+      /* 显式启用 */
+      "enabled": true
+    },
+    "formatter": {
+      /* 显式启用 */
+      "enabled": true,
+      "indentStyle": "space",
+      "indentWidth": 2,
+      "lineEnding": "lf",
+      "lineWidth": 120,
+      "quoteStyle": "double",
+      "trailingNewline": true
+    },
+    "linter": {
+      /* 显式启用 */
+      "enabled": true
+    },
+    "parser": {
+      /* 开启对css和tw模块的解析,推荐启用二者 */
+      "cssModules": true,
+      "tailwindDirectives": true
+    }
+  },
+
+  /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ Files
+  "files": {
+    "ignoreUnknown": true,
+    "includes": [
+      //顶级文件目录配置,之后的配置(不在该范围)将不会生效
+      "**",
+      "!**/node_modules",
+      "!**/.next",
+      "!**/dist",
+      "!**/build",
+      "!**/backend",
+      "!**/__fixtures__",
+      "!src/components/ui", //排除 shadcn-ui
+      "!src/components/assistant-ui", //排除 assistant-ui
+      "!src/components/animate-ui", //排除 animate-ui
+      "!src/components/reui", //排除 reui
+      "!src/components/magicui" //排除 magicui
+    ]
+  },
+
+  /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ Formatter
+  "formatter": {
+    "attributePosition": "multiline",
+    "bracketSameLine": false,
+    "bracketSpacing": true,
+    "expand": "always",
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineEnding": "lf",
+    "lineWidth": 120,
+    "trailingNewline": true,
+    "useEditorconfig": false
+  },
+
+  /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ JS - 配置
+  "javascript": {
+    "assist": {
+      /* 显式启用 */
+      "enabled": true
+    },
+    "formatter": {
+      /* 显式启用 */
+      "arrowParentheses": "always",
+      "attributePosition": "multiline",
+      "bracketSameLine": false,
+      "bracketSpacing": true,
+      "enabled": true,
+      "expand": "always",
+      "indentStyle": "space",
+      "indentWidth": 2,
+      "jsxQuoteStyle": "double",
+      "lineEnding": "lf",
+      "lineWidth": 88,
+      "operatorLinebreak": "after",
+      "quoteStyle": "double",
+      "semicolons": "always",
+      "trailingCommas": "all",
+      "trailingNewline": true
+    },
+    "linter": {
+      /* 显式启用 */
+      "enabled": true
+    }
+  },
+
+  /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ JSON - 配置
+  "json": {
+    "parser": {
+      "allowComments": true,
+      "allowTrailingCommas": true
+    }
+  },
+
+  /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ Linter
+  "linter": {
+    "enabled": true,
+    "domains": {
+      "next": "recommended",
+      "react": "recommended"
+    },
+    "rules": {
+      "a11y": "on", //符合友好访问
+      "performance": "on",
+      /* 符合简洁结构 */
+      "complexity": {
+        "recommended": true,
+        "useMaxParams": {
+          /* 修改参数数量限制(默认 3) */
+          "level": "info",
+          "options": {
+            "max": 6
+          }
+        }
+      },
+      "correctness": {
+        "noNodejsModules": "off"
+      },
+      "nursery": {
+        "useSortedClasses": {
+          //针对 tailwindcss的实例类排序
+          "fix": "safe",
+          "level": "on",
+          "options": {
+            "attributes": [
+              "className",
+              "class"
+            ],
+            "functions": [
+              "cva",
+              "cx",
+              "clsx",
+              "cn",
+              "tw",
+              "tw.*"
+            ]
+          }
+        }
+      },
+      //安全防御
+      "security": {
+        "noSecrets": {
+          "level": "on",
+          "options": {
+            "entropyThreshold": 51 //提高数值避免误报
+          }
+        }
+      },
+      "style": {
+        "noDefaultExport": "off", //排除必须 DefaultExport文件
+        "noJsxLiterals": "off", // i18n 文本提示
+        "noNamespace": "warn", //禁用命名空间(已过时)
+        "noNestedTernary": "warn", //禁用三元表达式嵌套
+        "useCollapsedIf": "warn", // if语句不嵌套
+        "useConsistentArrowReturn": "warn", //箭头函数体保持一致
+        "useConsistentTypeDefinitions": "warn" //始终用 interface/type
+      },
+      //检测可疑项
+      "suspicious": {
+        "noUnknownAtRules": "warn"
+      }
+    }
+  },
+
+  /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 特殊覆盖
+  "overrides": [
+    {
+      "assist": {
+        "actions": {
+          "source": {
+            "useSortedKeys": "off"
+          }
+        }
+      },
+      "formatter": {
+        "expand": "auto",
+        "trailingNewline": true
+      },
+      "includes": [
+        "**/tsconfig.*",
+        "**/tsconfig.json",
+        "**/components.json",
+        "**/package.json"
+      ]
+    }
+  ],
+
+  /// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ VCS
+  "vcs": {
+    "clientKind": "git",
+    "enabled": true,
+    "useIgnoreFile": true
+  }
+}

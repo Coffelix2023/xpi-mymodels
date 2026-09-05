@@ -1,0 +1,41 @@
+{
+  "name": "@fx-pi/xpi-mymodels",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "packageManager": "pnpm@11.24.0",
+  "keywords": ["pi-package", "pi-extension"],
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    },
+    "@earendil-works/pi-tui": {
+      "optional": true
+    },
+    "typebox": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.11",
+    "@earendil-works/pi-coding-agent": "^0.84.4",
+    "@types/node": "^24.13.3",
+    "typebox": "^1.0.0",
+    "typescript": "^6.0.3",
+    "vitest": "^3.0.0"
+  },
+  "pi": {
+    "extensions": ["./src/index.ts"]
+  },
+  "scripts": {
+    "lint": "biome check .",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit"
+  }
+}
