@@ -79,6 +79,7 @@ components:
 Terminal Minimalist TUI treats every character cell in the terminal as an information-dense workbench. Designed specifically for terminal command-line interfaces (CLIs), text user interfaces (TUIs), status footers, and Pi Coding Agent extensions, it emphasizes immediate legibility, non-disruptive presence, and minimal cognitive overhead.
 
 The visual style is restrained, predictable, and functional:
+
 - **Footers & Status Bars**: Pinned, single-line, zero-flicker components designed to inform without stealing developer focus.
 - **Modals & Inspectors**: Layered diagnostic panels with clean box-drawing boundaries, structured metrics grids, and predictable keyboard dismissals (`Esc`/`Enter`/`q`).
 - **Dual-Track Presentation (Optional)**: In graphical environments where native companion webview/window tools (e.g., Glimpse) are available, detailed inspectors can open in a dedicated 800×600 frameless dark micro-window, while seamlessly degrading to a centered Pi TUI modal in headless or remote SSH environments.
@@ -142,35 +143,46 @@ Shapes in the terminal are rendered via Unicode Box Drawing characters and frami
 Terminal components provide standardized building blocks for CLI tools, TUI footers, and modal inspectors:
 
 ### 1. Footer (`{components.footer}`)
+
 A compact 1-line status bar pinned to the bottom of the active session:
+
 - Displays extension status, active model, token metrics, or operational mode.
 - Rendered with muted metadata separators (`│` or `·`).
 - Must operate non-destructively on terminal redraws.
 
 ### 2. Status Bar (`{components.status-bar}`)
+
 Horizontal bar containing segmented key-value diagnostics:
+
 - Divided into logical zones (Left: Identity/Status, Center: Context/Task, Right: Resource/Help).
 
 ### 3. Badge (`{components.badge}`)
+
 Compact status indicator (e.g., `[PASS]`, `[FAIL]`, `[IDLE]`, `● on`):
+
 - Pairs a semantic color (`success`, `warning`, `error`, `muted`) with concise text.
 
 ### 4. Box & Panel (`{components.box}`)
+
 Framed content panel for grouped diagnostics, diff previews, or wizard cards.
 
 ### 5. Modal & Inspector (`{components.modal}`)
+
 For comprehensive status inspections, follows a **4-tier vertical information architecture**:
+
 1. **Header**: Title and status badge (e.g., `╭─ [Title: System Status] ──────────── [Badge: ● on] ─╮`).
 2. **Key-Value Grid**: 2-column or 4-column high-priority operational metrics.
 3. **Divider & Details**: Horizontal divider (`├──────┤`) with scrollable diagnostic rows.
 4. **Footer / Navigation**: Bottom action hints (e.g., `╰─ ↑/↓ scroll · Esc / Enter close ────╯`).
 
 ### 6. Key-Value Row (`{components.key-value}`)
+
 Aligned label-value pairs with dimmed muted keys and crisp ink values.
 
 ## Do's and Don'ts
 
 ### Do's (Mandatory Practices)
+
 - **Do** use `truncateToWidth` / `visibleWidth` for all terminal line width calculations and border padding.
 - **Do** enforce a bottom safety margin (`margin.bottom >= 4`) for centered overlays to keep the user prompt visible.
 - **Do** support standard dismissal keys (`Esc`, `Enter`, `q`) for interactive dialogs and modal overlays.
@@ -180,9 +192,36 @@ Aligned label-value pairs with dimmed muted keys and crisp ink values.
 - **Do** preserve terminal cursor position and avoid overwriting user scrollback history.
 
 ### Don'ts (Strict Prohibitions)
+
 - **Don't** use raw `string.length` to calculate padding for lines containing ANSI escape sequences or multi-byte characters.
 - **Don't** use `anchor: "bottom-right"` with negative offsets that risk covering input controls.
 - **Don't** inject unescaped dynamic text directly into native window HTML templates.
 - **Don't** use neon RGB flashes, heavy full-screen clearing, or excessive blinking text.
 - **Don't** mix incompatible box-drawing character sets (e.g. mixing double-line `╔` with rounded `╭` in a single component).
 - **Don't** hardcode absolute developer-machine file paths for assets or binaries.
+
+## Architecture Decisions (xpi-mymodels feature design)
+
+> 来源:`docs/plan-notes/deck.json`(用户已确认,2026-09-05)与 `docs/plan-notes/notes.md`。
+
+### D1 · 持久化策略:文件优先
+
+校验后原子写入 `~/.pi/agent/models.json`(`models.json.bak` 备份 + 写失败回滚);保存后提示用户重开 `/model` 刷新模型选择器。实现成本最低,重启行为最可预测。
+
+### D2 · 表单组织:分组折叠
+
+基础字段(baseUrl、api、apiKey)默认展开;Models、Thinking、Compatibility、Sampling、Pricing 按组折叠。符合 Pi TUI 的纵向滚动习惯,首屏可扫描。
+
+### D3 · Ctrl+P 管理:独立循环列表
+
+左侧模型总表,右侧单独维护快速切换顺序。可用性 ≠ 循环资格:`enabledModels` 只控制 Ctrl+P 循环顺序,不是模型白名单。
+
+### D4 · 价格输入:USD/CNY 归一
+
+界面可切 USD 或 CNY,保存时统一换算为 Pi 识别的 USD / 1M tokens 费率(`toUsd()`)。
+**汇率假设:固定 7.24 CNY/USD**(界面标注"固定汇率");实时汇率与用户可配置汇率留 v2。落盘格式保持纯 USD,与 Pi 原生费用统计直接兼容。
+
+### 延后项(v2)
+
+- 模型连通性测试(用户未选择"费率预览+测试";当前实现中的 T 测试键为附加能力)。
+- 实时汇率获取与汇率快照记录。

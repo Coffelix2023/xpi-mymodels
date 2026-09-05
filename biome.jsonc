@@ -214,6 +214,19 @@
         "**/components.json",
         "**/package.json"
       ]
+    },
+    {
+      "assist": {
+        "actions": {
+          "source": {
+            "useSortedKeys": "off"
+          }
+        }
+      },
+      // docs/plan-notes/ 是设计工具提交快照,保持原始键序,不做排序检查
+      "includes": [
+        "docs/plan-notes/**"
+      ]
     }
   ],
 
