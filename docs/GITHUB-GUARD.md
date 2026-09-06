@@ -7,15 +7,15 @@
 
 ## 当前阶段
 
-- `xpi-mymodels` 目前按**阶段一**处理：单人快速迭代优先。
-- 当前仓库不启用 `release-please`。
-- 无远端、无历史提交的新脚手架允许在当前主分支创建首次本地提交；这是直推保护分支规则之外的初始化例外。
-- 如果以后切到阶段二，再把流程改成“分支 + PR + 人工合并”为主。
+- `xpi-mymodels` 采用**单主干开发 (Trunk-Based Development)**，**仅保留 `main` 分支**。
+- 不再使用或新增临时分支；所有修改均直接在 `main` 分支经严格本地测试后提交并推送。
+- 提交门禁：提交前必须保证 `pnpm typecheck`、`pnpm -w run lint`、`pnpm test` 全部通过。
+- 允许直推 `origin main`（在本地全绿且同步远端最新后直接推送）。
 
 ## 本仓库约束
 
-- 默认不直推保护分支。
-- 不强推、不删分支、不改 GitHub ruleset / branch protection / 仓库 settings。
+- 仅保留 `main` 主干分支，清理全部已合并的临时分支。
+- 严禁任何强推（`git push --force`）、删除主干或绕过 git hooks 的操作。
 - 不绕过 git hooks。
 - 不把密钥 / Token 写入代码、日志、示例、文档。
 - `.github/` 目录的变更必须先告知用户。

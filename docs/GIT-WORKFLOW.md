@@ -14,9 +14,9 @@
 
 ## 2. 默认原则
 
-- `main` / `master` 视为保护分支。
-- 默认不直推保护分支。
-- 所有提交必须小粒度、可回滚。
+- 本项目采用**单主干开发 (Trunk-Based Development)**，**仅保留 `main` 分支**。
+- 不再采用或新增任何特性/修复等临时分支（禁止新建 `feat/*`、`fix/*` 等）。
+- 所有提交必须小粒度、可回滚、经过全套质量门禁验证。
 - 任何会覆盖、丢失、重写历史的操作都要先停下并说明风险。
 - 先看状态，再动 Git。
 
@@ -24,27 +24,25 @@
 
 只要任务碰到 Git / GitHub / 远端仓库 / release，先按顺序做：
 
-1. `git branch --show-current`
+1. `git branch --show-current`（确保在 `main` 分支）
 2. `git status --short`
 3. `git diff --stat`
 4. `git remote get-url origin`；仅成功时执行 `git fetch origin`
-5. 检查当前分支与远端关系；无远端的新仓库跳过同步
+5. 检查本地 `main` 与 `origin/main` 状态；有落后时优先 `git pull --rebase origin main`
 
 然后再决定：
-- 建分支
-- 继续本分支
-- 只做本地提交
-- 推送
-- 开 PR
-- 暂停并问用户
+- 运行本地验证门禁（`typecheck`、`lint`、`test`）
+- 进行小粒度本地提交
+- 推送 `origin main`
+- 发布 Release / Tag
+- 暂停并说明风险
 
-## 4. 分支规则
+## 4. 分支规则 (单主干规范)
 
-- 新工作默认放在 `feat/*`、`fix/*`、`refactor/*`、`chore/*`、`docs/*`、`test/*`。
-- 当前在 `main/master` 时，默认先建工作分支，再做修改。
-- 只有当项目级阶段说明明确允许例外时，才可在 `main` 上继续。
-- 如果项目文档没有明确写“允许直推 main”，按“先分支后 PR”处理。
-
+- **仅保留 `main`**：本项目已全面切换为单主干开发，不再创建、切换或维护除 `main` 之外的任何分支。
+- **直接在 `main` 迭代**：所有功能新增、缺陷修复、文档更新均在本地 `main` 分支完成，严禁新建分支。
+- **门禁先行**：在 `main` 提交前必须保证 `pnpm typecheck`、`pnpm -w run lint`、`pnpm test` 全部通过。
+- **直推规范**：本地提交完成后，执行 `git pull --rebase origin main`，测试全绿后直接推送至 `origin main`。
 ## 5. 暂存与提交
 
 - 优先使用 `git add <specific-file>`。

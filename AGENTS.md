@@ -59,14 +59,12 @@ pnpm test             # vitest run
 - **冒烟**:`pi -e ./src/index.ts`(quick test,不支持热载)。
 - **日常开发**:软链到 `~/.pi/agent/extensions/xpi-mymodels`,在 Pi 内 `/reload` 热载。
 
-## 6. Git 与回滚纪律
-- 只要任务碰到 git / GitHub / 远端仓库 / release，先读 `docs/GIT-WORKFLOW.md`，再读 `docs/GITHUB-GUARD.md`。
-- 先做 `git branch --show-current`、`git status --short`、`git diff --stat`; 仅存在 `origin` 时再 `git fetch origin`,然后决定建分支、提交、推送或暂停。
-- 默认不直推 `main/master`; 如果项目文档允许例外, 以项目文档为准。
-- 暂存用 `git add <specific-file>`; 提交用小粒度 Conventional Commits; 不用 `git add .` / `git add -A`.
-- 推送分支后再开 PR; Agent 不代做 merge, 不代做 `git push --force`、`reset --hard`、`restore .`、`checkout .`、`clean -fd`、`--no-verify`.
-- 如果用户问合并 / release / 发布, 说明 GitHub UI 里的下一步并停在需要人类确认的位置。
-- 远端不存在、分叉、冲突、ignore 对不上时先说风险, 不猜测.
+## 6. Git 与单主干开发纪律 (Trunk-Based Development)
+- **单主干规则**: 本项目严格实行单主干开发，**仅保留 `main` 分支**。严禁创建或切换到临时特性/修复分支（如 `feat/*`、`fix/*` 等）；所有迭代和修复均直接在 `main` 分支完成。
+- **前置动作**: 只要任务碰到 git / GitHub / 远端仓库 / release，先读 `docs/GIT-WORKFLOW.md` 与 `docs/GITHUB-GUARD.md`。先做 `git branch --show-current`、`git status --short`、`git diff --stat`；存在 `origin` 时再 `git fetch origin`。
+- **提交门禁**: 本地提交前必须保证开发回路三条全绿（`pnpm typecheck`、`pnpm -w run lint`、`pnpm test` 全部通过）。暂存用 `git add <specific-file>`，提交用小粒度 Conventional Commits；禁止使用 `git add .` / `git add -A`。
+- **远端同步与推送**: 提交后通过 `git pull --rebase origin main` 同步远端，全绿后直推 `origin main`。Agent 不代做 `git push --force`、`reset --hard`、`restore .`、`checkout .`、`clean -fd`、`--no-verify`。
+- **发布流程**: 生产发布与版本标签统一基于 `main` 分支执行，说明 GitHub UI / Release 里的下一步并停在需要人类确认的位置。远端分叉、冲突或 ignore 不匹配时先说明风险，禁止推测。
 
 ## 7. 禁止清单
 - ❌ 引入 Web 交付框架(`next`/`react-dom`/路由框架)或浏览器专属 API.
