@@ -3,6 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  addProvider,
+  deleteProvider,
   estimateCost,
   getEnabledModels,
   type JsonObject,
@@ -18,6 +20,9 @@ import {
 } from "../src/models.ts";
 
 const SAVE_ERROR = /Could not save Pi configuration/;
+const PROVIDER_EXISTS = /already exists/;
+const PROVIDER_EMPTY_ID = /must not be empty/;
+const PROVIDER_MISSING = /no longer exists/;
 describe("model configuration data", () => {
   it("reads JSONC with comments and trailing commas", async () => {
     const dir = await mkdtemp(join(tmpdir(), "xpi-mymodels-"));
@@ -331,5 +336,61 @@ describe("model configuration data", () => {
       },
     });
     expect(await readFile(modelsPath, "utf8")).not.toContain("tmp");
+  });
+
+  it("adds a provider and deletes it with exact enabledModels cleanup", () => {
+    const models: JsonObject = {
+      providers: {
+        local: {
+          api: "openai-completions",
+          baseUrl: "http://localhost:8080/v1",
+          models: [
+            {
+              id: "qwen",
+            },
+          ],
+        },
+      },
+    };
+    const settings: JsonObject = {
+      theme: "dark",
+      enabledModels: [
+        "local/qwen",
+        "cloud/opus",
+        "cloud/*",
+      ],
+    };
+
+    const added = addProvider(models, "cloud");
+    expect(added).toMatchObject({
+      api: "openai-completions",
+      authHeader: true,
+      baseUrl: "https://api.example.com/v1",
+      id: "cloud",
+      models: [],
+      name: "cloud",
+    });
+    expect(() => addProvider(models, "cloud")).toThrow(PROVIDER_EXISTS);
+    expect(() => addProvider(models, "  ")).toThrow(PROVIDER_EMPTY_ID);
+
+    deleteProvider(models, settings, "local");
+    expect(models.providers).toEqual({
+      cloud: expect.objectContaining({
+        api: "openai-completions",
+        authHeader: true,
+        baseUrl: "https://api.example.com/v1",
+        models: [],
+        name: "cloud",
+      }),
+    });
+    expect(models.providers).not.toHaveProperty("local");
+    expect(settings).toEqual({
+      theme: "dark",
+      enabledModels: [
+        "cloud/opus",
+        "cloud/*",
+      ],
+    });
+    expect(() => deleteProvider(models, settings, "missing")).toThrow(PROVIDER_MISSING);
   });
 });
