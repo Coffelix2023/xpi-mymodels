@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { panelHtml } from "../src/glimpse.ts";
 import {
   addProvider,
   deleteProvider,
@@ -26,6 +27,44 @@ const PROVIDER_EXISTS = /already exists/;
 const PROVIDER_EMPTY_ID = /must not be empty/;
 const PROVIDER_MISSING = /no longer exists/;
 describe("model configuration data", () => {
+  it("embeds Glimpse data as executable JavaScript", () => {
+    const html = panelHtml([
+      {
+        api: "openai-completions",
+        apiKey: "",
+        authHeader: true,
+        baseUrl: "https://example.test/v1",
+        id: "local",
+        models: [
+          {
+            contextWindow: 128_000,
+            id: "qwen",
+            maxTokens: 16_384,
+            name: "Qwen",
+            reasoning: false,
+            cost: {
+              cacheRead: 0,
+              cacheWrite: 0,
+              input: 1,
+              output: 2,
+            },
+            input: [
+              "text",
+              "image",
+            ],
+          },
+        ],
+      },
+    ]);
+    const script = html
+      .slice(html.indexOf("<script>") + "<script>".length, html.indexOf("</script>"))
+      .trim();
+
+    expect(script.startsWith("const DATA={")).toBe(true);
+    expect(script).not.toContain("JSON.parse(");
+    expect(() => new Function(script)).not.toThrow();
+  });
+
   it("resolves both supported API key environment variable forms", () => {
     const previous = process.env.TKM_KEY_GPT_PLUS;
     process.env.TKM_KEY_GPT_PLUS = "resolved-value";
