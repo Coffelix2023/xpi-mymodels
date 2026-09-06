@@ -348,7 +348,7 @@ function preserveRenamedModelFields(
 
 function defaultModel(): ModelDraft {
   return {
-    contextWindow: 128_000,
+    contextWindow: 300_000,
     id: "",
     maxTokens: 16_384,
     name: "",

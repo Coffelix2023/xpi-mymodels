@@ -103,12 +103,15 @@ class ModelConfigPanel implements Component {
       ),
       this.theme.fg("muted", `models.json  ${MODELS_PATH}`),
       "",
-      this.section(
-        "BASIC",
-        provider
-          ? `${provider.id}  ·  ${provider.api}  ·  ${provider.baseUrl || "no baseUrl"}`
-          : "No provider configured",
-      ),
+      this.section("BASIC", provider ? "" : "No provider configured; press N to add"),
+      ...(provider
+        ? [
+            this.kv("id", provider.id),
+            this.kv("api", provider.api),
+            this.kv("baseUrl", provider.baseUrl || "no baseUrl"),
+            this.kv("apiKey", provider.apiKey ? "(set)" : "(empty)"),
+          ]
+        : []),
       this.section(
         "MODELS",
         provider
@@ -188,7 +191,12 @@ class ModelConfigPanel implements Component {
   }
 
   private section(label: string, detail: string): string {
-    return `${this.theme.fg("accent", `▼ ${label}`)}  ${this.theme.fg("muted", detail)}`;
+    const head = this.theme.fg("accent", `▼ ${label}`);
+    return detail ? `${head}  ${this.theme.fg("muted", detail)}` : head;
+  }
+
+  private kv(key: string, value: string): string {
+    return `${this.theme.fg("muted", `  ${key}`)}  ${value}`;
   }
 
   private modelLines(
