@@ -11,6 +11,7 @@ import {
   listProviderDrafts,
   modelReference,
   readJsonc,
+  renameProvider,
   saveModelsAndSettings,
   setEnabledModels,
   toUsd,
@@ -18,12 +19,39 @@ import {
   upsertProvider,
   validateModelsConfig,
 } from "../src/models.ts";
+import { resolveSecret } from "../src/ui.ts";
 
 const SAVE_ERROR = /Could not save Pi configuration/;
 const PROVIDER_EXISTS = /already exists/;
 const PROVIDER_EMPTY_ID = /must not be empty/;
 const PROVIDER_MISSING = /no longer exists/;
 describe("model configuration data", () => {
+  it("resolves both supported API key environment variable forms", () => {
+    const previous = process.env.TKM_KEY_GPT_PLUS;
+    process.env.TKM_KEY_GPT_PLUS = "resolved-value";
+
+    try {
+      expect(resolveSecret("$TKM_KEY_GPT_PLUS")).toBe("resolved-value");
+      expect(resolveSecret("$" + "{TKM_KEY_GPT_PLUS}")).toBe("resolved-value");
+      expect(resolveSecret("$TKM_KEY_MISSING")).toBe("");
+    } finally {
+      if (previous === undefined) delete process.env.TKM_KEY_GPT_PLUS;
+      else process.env.TKM_KEY_GPT_PLUS = previous;
+    }
+  });
+
+  it("defaults the authorization header to true for legacy providers", () => {
+    const [provider] = listProviderDrafts({
+      providers: {
+        local: {
+          authHeader: false,
+        },
+      },
+    });
+
+    expect(provider.authHeader).toBe(true);
+  });
+
   it("reads JSONC with comments and trailing commas", async () => {
     const dir = await mkdtemp(join(tmpdir(), "xpi-mymodels-"));
     const path = join(dir, "models.json");
@@ -98,6 +126,77 @@ describe("model configuration data", () => {
     });
   });
 
+  it("renames a provider and migrates every model reference", () => {
+    const models: JsonObject = {
+      providers: {
+        cloud: {
+          models: [
+            {
+              id: "opus",
+            },
+          ],
+        },
+        local: {
+          baseUrl: "https://local.example/v1",
+          models: [
+            {
+              id: "qwen",
+            },
+          ],
+        },
+      },
+    };
+    const settings: JsonObject = {
+      enabledModels: [
+        "local/qwen",
+        "local/*",
+        "cloud/opus",
+      ],
+    };
+
+    renameProvider(models, settings, "local", "remote");
+
+    expect(models.providers).toEqual({
+      cloud: {
+        models: [
+          {
+            id: "opus",
+          },
+        ],
+      },
+      remote: {
+        baseUrl: "https://local.example/v1",
+        models: [
+          {
+            id: "qwen",
+          },
+        ],
+      },
+    });
+    expect(getEnabledModels(settings)).toEqual([
+      "remote/qwen",
+      "remote/*",
+      "cloud/opus",
+    ]);
+  });
+
+  it("rejects provider renames to an existing or empty id", () => {
+    const models: JsonObject = {
+      providers: {
+        cloud: {},
+        local: {},
+      },
+    };
+    const settings: JsonObject = {};
+
+    expect(() => renameProvider(models, settings, "local", "cloud")).toThrow(
+      PROVIDER_EXISTS,
+    );
+    expect(() => renameProvider(models, settings, "local", "  ")).toThrow(
+      PROVIDER_EMPTY_ID,
+    );
+  });
+
   it("applies safe defaults when core model fields are absent", () => {
     const [provider] = listProviderDrafts({
       providers: {
@@ -125,9 +224,48 @@ describe("model configuration data", () => {
       },
       input: [
         "text",
+        "image",
       ],
     });
     expect(model).not.toHaveProperty("apiKey");
+  });
+  it("supports text and image input capabilities", () => {
+    const [provider] = listProviderDrafts({
+      providers: {
+        local: {
+          models: [
+            {
+              id: "multimodal",
+              input: [
+                "text",
+                "image",
+              ],
+            },
+          ],
+        },
+      },
+    });
+
+    expect(provider.models[0].input).toEqual([
+      "text",
+      "image",
+    ]);
+    expect(
+      validateModelsConfig({
+        providers: {
+          local: {
+            models: [
+              {
+                id: "bad",
+                input: [
+                  "audio",
+                ],
+              },
+            ],
+          },
+        },
+      }),
+    ).toContain("providers.local.models.0.input must contain supported capabilities");
   });
 
   it("rejects duplicate model ids and invalid numeric fields", () => {
@@ -202,14 +340,47 @@ describe("model configuration data", () => {
     });
     expect(validateModelsConfig(config)).not.toContain("super-secret");
   });
+  it("hides and removes legacy provider and model overrides", () => {
+    const config: JsonObject = {
+      providers: {
+        local: {
+          api: "openai-completions",
+          baseUrl: "https://provider.example/v1",
+          name: "Legacy local",
+          models: [
+            {
+              api: "anthropic-messages",
+              baseUrl: "https://model.example/v1",
+              id: "qwen",
+            },
+          ],
+        },
+      },
+    };
 
-  it("normalizes a CNY pricing input (72.4 CNY at fixed 7.24) to 10 USD per 1M tokens", () => {
-    expect(toUsd(72.4, "CNY", 7.24)).toBeCloseTo(10, 10);
+    const [provider] = listProviderDrafts(config);
+    expect(provider).not.toHaveProperty("name");
+    expect(provider.models[0]).not.toHaveProperty("api");
+    expect(provider.models[0]).not.toHaveProperty("baseUrl");
+
+    upsertProvider(config, provider);
+
+    expect(config.providers.local).not.toHaveProperty("name");
+    expect(config.providers.local).toHaveProperty(
+      "baseUrl",
+      "https://provider.example/v1",
+    );
+    expect(config.providers.local.models?.[0]).not.toHaveProperty("api");
+    expect(config.providers.local.models?.[0]).not.toHaveProperty("baseUrl");
+  });
+
+  it("normalizes a CNY pricing input at the fixed 7 CNY/USD rate", () => {
+    expect(toUsd(70, "CNY", 7)).toBeCloseTo(10, 10);
   });
 
   it("converts CNY rates to Pi's USD billing rates", () => {
-    expect(toUsd(7.24, "CNY", 7.24)).toBe(1);
-    expect(toUsd(1, "USD", 7.24)).toBe(1);
+    expect(toUsd(7, "CNY", 7)).toBe(1);
+    expect(toUsd(1, "USD", 7)).toBe(1);
     expect(
       estimateCost(
         {
@@ -238,7 +409,6 @@ describe("model configuration data", () => {
       authHeader: false,
       baseUrl: "http://localhost:8080/v1",
       id: "local",
-      name: "Local",
       models: [
         {
           contextWindow: 128_000,
@@ -368,7 +538,6 @@ describe("model configuration data", () => {
       baseUrl: "https://api.example.com/v1",
       id: "cloud",
       models: [],
-      name: "cloud",
     });
     expect(() => addProvider(models, "cloud")).toThrow(PROVIDER_EXISTS);
     expect(() => addProvider(models, "  ")).toThrow(PROVIDER_EMPTY_ID);
@@ -380,7 +549,6 @@ describe("model configuration data", () => {
         authHeader: true,
         baseUrl: "https://api.example.com/v1",
         models: [],
-        name: "cloud",
       }),
     });
     expect(models.providers).not.toHaveProperty("local");

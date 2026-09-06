@@ -27,6 +27,11 @@ export type ApiName =
   | "anthropic-messages"
   | "google-generative-ai";
 
+export type InputCapability = "text" | "image";
+const INPUT_CAPABILITIES: readonly InputCapability[] = [
+  "text",
+  "image",
+];
 export interface CostRates {
   cacheRead: number;
   cacheWrite: number;
@@ -35,14 +40,12 @@ export interface CostRates {
 }
 
 export interface ModelDraft {
-  api?: ApiName;
-  baseUrl?: string;
   compat?: JsonObject;
   contextWindow: number;
   cost: CostRates;
   headers?: Record<string, string>;
   id: string;
-  input: ("text" | "image")[];
+  input: InputCapability[];
   maxTokens: number;
   name: string;
   reasoning: boolean;
@@ -59,7 +62,6 @@ export interface ProviderDraft {
   headers?: Record<string, string>;
   id: string;
   models: ModelDraft[];
-  name: string;
 }
 
 const DEFAULT_CONTEXT_WINDOW = 128_000;
@@ -176,9 +178,9 @@ function validateModel(value: JsonValue, path: string, errors: string[]): void {
   if (
     value.input !== undefined &&
     (!Array.isArray(value.input) ||
-      value.input.some((item) => item !== "text" && item !== "image"))
+      value.input.some((item) => !isInputCapability(item)))
   ) {
-    errors.push(`${path}.input must contain only text or image`);
+    errors.push(`${path}.input must contain supported capabilities`);
   }
   if (value.cost !== undefined) validateCost(value.cost, `${path}.cost`, errors);
   validateHeaders(value.headers, `${path}.headers`, errors);
@@ -224,6 +226,10 @@ function isNonEmptyString(value: JsonValue | undefined): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function isInputCapability(value: JsonValue): value is InputCapability {
+  return typeof value === "string" && INPUT_CAPABILITIES.some((item) => item === value);
+}
+
 function isPositiveNumber(value: JsonValue): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
@@ -258,29 +264,25 @@ export function listProviderDrafts(value: JsonObject): ProviderDraft[] {
         id,
         api: apiValue(provider.api),
         apiKey: stringValue(provider.apiKey, ""),
-        authHeader: provider.authHeader !== false,
+        authHeader: true,
         baseUrl: stringValue(provider.baseUrl, ""),
         compat: isObject(provider.compat) ? clone(provider.compat) : undefined,
         headers: stringMap(provider.headers),
         models: getModels(provider).map((model) => modelDraftFromJson(model)),
-        name: stringValue(provider.name, id),
       },
     ];
   });
 }
 
 function modelDraftFromJson(model: JsonObject): ModelDraft {
-  const input: ("text" | "image")[] = Array.isArray(model.input)
-    ? model.input.filter(
-        (item): item is "text" | "image" => item === "text" || item === "image",
-      )
+  const input: InputCapability[] = Array.isArray(model.input)
+    ? model.input.filter(isInputCapability)
     : [
         "text",
+        "image",
       ];
   const cost = isObject(model.cost) ? model.cost : {};
   return {
-    api: model.api === undefined ? undefined : apiValue(model.api),
-    baseUrl: stringValueOrUndefined(model.baseUrl),
     compat: isObject(model.compat) ? clone(model.compat) : undefined,
     contextWindow: numberValue(model.contextWindow, DEFAULT_CONTEXT_WINDOW),
     headers: stringMap(model.headers),
@@ -290,6 +292,7 @@ function modelDraftFromJson(model: JsonObject): ModelDraft {
         ? input
         : [
             "text",
+            "image",
           ],
     maxTokens: numberValue(model.maxTokens, DEFAULT_MAX_TOKENS),
     name: stringValue(model.name, stringValue(model.id, "")),
@@ -311,10 +314,6 @@ function modelDraftFromJson(model: JsonObject): ModelDraft {
 
 function stringValue(value: JsonValue | undefined, fallback: string): string {
   return typeof value === "string" ? value : fallback;
-}
-
-function stringValueOrUndefined(value: JsonValue | undefined): string | undefined {
-  return typeof value === "string" ? value : undefined;
 }
 
 function numberValue(value: JsonValue | undefined, fallback: number): number {
@@ -354,18 +353,52 @@ function omitKey(target: JsonObject, key: string): void {
 export function upsertProvider(value: JsonObject, draft: ProviderDraft): void {
   const provider = getProvider(value, draft.id);
   const existingModels = getModels(provider);
-  provider.name = draft.name;
+  omitKey(provider, "name");
   provider.baseUrl = draft.baseUrl;
   provider.api = draft.api;
-  provider.authHeader = draft.authHeader;
+  provider.authHeader = true;
   if (draft.apiKey.trim()) provider.apiKey = draft.apiKey.trim();
   else omitKey(provider, "apiKey");
   setOptionalObject(provider, "headers", draft.headers);
   setOptionalObject(provider, "compat", draft.compat);
-  provider.models = draft.models.map((model) => ({
-    ...(existingModels.find((item) => item.id === model.id) ?? {}),
-    ...modelToJson(model),
-  }));
+  provider.models = draft.models.map((model) => {
+    const nextModel = {
+      ...(existingModels.find((item) => item.id === model.id) ?? {}),
+      ...modelToJson(model),
+    };
+    omitKey(nextModel, "api");
+    omitKey(nextModel, "baseUrl");
+    return nextModel;
+  });
+}
+
+export function renameProvider(
+  value: JsonObject,
+  settings: JsonObject,
+  previousId: string,
+  rawNextId: string,
+): void {
+  const from = previousId.trim();
+  const to = rawNextId.trim();
+  if (!to) throw new Error("provider id must not be empty");
+  if (!isObject(value.providers) || value.providers[from] === undefined)
+    throw new Error("The selected provider no longer exists");
+  if (from === to) return;
+  if (value.providers[to] !== undefined)
+    throw new Error(`provider ${to} already exists`);
+
+  const providers: JsonObject = {};
+  for (const [id, provider] of Object.entries(value.providers))
+    providers[id === from ? to : id] = provider;
+  value.providers = providers;
+
+  const prefix = `${from}/`;
+  setEnabledModels(
+    settings,
+    getEnabledModels(settings).map((pattern) =>
+      pattern.startsWith(prefix) ? `${to}/${pattern.slice(prefix.length)}` : pattern,
+    ),
+  );
 }
 
 export function addProvider(value: JsonObject, rawId: string): ProviderDraft {
@@ -381,7 +414,6 @@ export function addProvider(value: JsonObject, rawId: string): ProviderDraft {
     baseUrl: "https://api.example.com/v1",
     id,
     models: [],
-    name: id,
   };
   upsertProvider(value, draft);
   return draft;
@@ -418,8 +450,6 @@ function modelToJson(draft: ModelDraft): JsonObject {
       ...draft.input,
     ],
   };
-  if (draft.api) model.api = draft.api;
-  if (draft.baseUrl) model.baseUrl = draft.baseUrl;
   setOptionalObject(model, "thinkingLevelMap", draft.thinkingLevelMap);
   setOptionalObject(model, "samplingParams", draft.samplingParams);
   setOptionalObject(model, "headers", draft.headers);

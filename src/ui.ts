@@ -3,6 +3,7 @@ import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { type Component, Key, matchesKey, type TUI } from "@earendil-works/pi-tui";
 import {
+  type ApiName,
   type Currency,
   estimateCost,
   getEnabledModels,
@@ -12,6 +13,7 @@ import {
   modelReference,
   type ProviderDraft,
   readJsonc,
+  renameProvider,
   saveModelsAndSettings,
   setEnabledModels,
   toUsd,
@@ -21,7 +23,7 @@ import {
 const MODELS_PATH = join(getAgentDir(), "models.json");
 const SETTINGS_PATH = join(getAgentDir(), "settings.json");
 // ponytail: fixed exchange rate per plan (docs/plan-notes/notes.md); make user-configurable when live rates are requested
-const CNY_PER_USD = 7.24;
+const CNY_PER_USD = 7;
 const API_OPTIONS = [
   "openai-completions",
   "openai-responses",
@@ -253,12 +255,11 @@ class ModelConfigPanel implements Component {
       baseUrl: "",
       id: id.trim(),
       models: [],
-      name: id.trim(),
     };
     this.providers.push(provider);
     this.providerIndex = this.providers.length - 1;
     this.modelIndex = 0;
-    await this.editProviderFields(provider);
+    await this.editProviderFields(provider, false);
     this.invalidate();
     this.tui.requestRender();
   }
@@ -271,9 +272,21 @@ class ModelConfigPanel implements Component {
     this.tui.requestRender();
   }
 
-  private async editProviderFields(provider: ProviderDraft): Promise<void> {
-    const name = await this.ctx.ui.input("Provider display name", provider.name);
-    if (name?.trim()) provider.name = name.trim();
+  private async editProviderFields(
+    provider: ProviderDraft,
+    allowRename = true,
+  ): Promise<void> {
+    const id = await this.ctx.ui.input("Provider id", provider.id);
+    const nextId = id?.trim();
+    if (allowRename && nextId && nextId !== provider.id) {
+      try {
+        renameProvider(this.models, this.settings, provider.id, nextId);
+        provider.id = nextId;
+      } catch (error) {
+        this.setStatus("error", error instanceof Error ? error.message : String(error));
+        return;
+      }
+    }
     const baseUrl = await this.ctx.ui.input(
       "Base URL",
       provider.baseUrl || "https://api.example.com/v1",
@@ -289,13 +302,7 @@ class ModelConfigPanel implements Component {
       "secret values are never displayed",
     );
     if (apiKey?.trim()) provider.apiKey = apiKey.trim();
-    provider.authHeader = await this.ctx.ui.confirm(
-      "Authorization header",
-      "Send Authorization: Bearer <apiKey> automatically?",
-      {
-        timeout: 30_000,
-      },
-    );
+    provider.authHeader = true;
   }
 
   private async addModel(): Promise<void> {
@@ -350,17 +357,6 @@ class ModelConfigPanel implements Component {
     model.id = id.trim();
     const name = await this.ctx.ui.input("Model display name", model.name || model.id);
     if (name?.trim()) model.name = name.trim();
-    const api = await this.ctx.ui.select("Model API override (optional)", [
-      "provider default",
-      ...API_OPTIONS,
-    ]);
-    model.api =
-      api && api !== "provider default" ? (api as ModelDraft["api"]) : undefined;
-    const endpoint = await this.ctx.ui.input(
-      "Model base URL override (optional)",
-      model.baseUrl ?? "",
-    );
-    model.baseUrl = endpoint?.trim() || undefined;
     model.reasoning = await this.ctx.ui.confirm(
       "Reasoning",
       "Does this model support extended thinking?",
@@ -396,7 +392,7 @@ class ModelConfigPanel implements Component {
     );
     model.maxTokens = await numberInput("Max output tokens", model.maxTokens, this.ctx);
     const currency = await this.ctx.ui.select(
-      "Pricing currency (fixed rate 7.24 CNY/USD)",
+      "Pricing currency (fixed rate 7 CNY/USD)",
       [
         "USD",
         "CNY",
@@ -499,7 +495,7 @@ class ModelConfigPanel implements Component {
           : {}),
         ...provider.headers,
       };
-      const endpoint = `${(model.baseUrl || provider.baseUrl).replace(TRAILING_SLASH, "")}${apiPath(provider.api)}`;
+      const endpoint = `${provider.baseUrl.replace(TRAILING_SLASH, "")}${apiPath(provider.api)}`;
       const body = pingBody(provider.api, model.id);
       const response = await fetch(endpoint, {
         method: "POST",
@@ -533,16 +529,13 @@ class ModelConfigPanel implements Component {
 
 const TRAILING_SLASH = /\/$/;
 
-function apiPath(api: ModelDraft["api"] | undefined): string {
+function apiPath(api: ApiName): string {
   if (api === "anthropic-messages") return "/messages";
   if (api === "openai-responses") return "/responses";
   return "/chat/completions";
 }
 
-function pingBody(
-  api: ModelDraft["api"] | undefined,
-  modelId: string,
-): Record<string, unknown> {
+function pingBody(api: ApiName, modelId: string): Record<string, unknown> {
   if (api === "anthropic-messages") {
     return {
       max_tokens: 1,
@@ -590,7 +583,7 @@ async function numberInput(
 
 const ENV_SECRET = /^\$\{?([A-Z_][A-Z0-9_]*)\}?$/;
 
-function resolveSecret(value: string): string {
+export function resolveSecret(value: string): string {
   const match = value.match(ENV_SECRET);
   return match ? (process.env[match[1]] ?? "") : value;
 }
