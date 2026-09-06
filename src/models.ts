@@ -368,6 +368,42 @@ export function upsertProvider(value: JsonObject, draft: ProviderDraft): void {
   }));
 }
 
+export function addProvider(value: JsonObject, rawId: string): ProviderDraft {
+  const id = rawId.trim();
+  if (!id) throw new Error("provider id must not be empty");
+  if (!isObject(value.providers)) value.providers = {};
+  if (value.providers[id] !== undefined)
+    throw new Error(`provider ${id} already exists`);
+  const draft: ProviderDraft = {
+    api: "openai-completions",
+    apiKey: "",
+    authHeader: true,
+    baseUrl: "https://api.example.com/v1",
+    id,
+    models: [],
+    name: id,
+  };
+  upsertProvider(value, draft);
+  return draft;
+}
+
+export function deleteProvider(
+  value: JsonObject,
+  settings: JsonObject,
+  providerId: string,
+): void {
+  if (!isObject(value.providers) || value.providers[providerId] === undefined)
+    throw new Error("The selected provider no longer exists");
+  const rawProvider = value.providers[providerId];
+  const models = isObject(rawProvider) ? getModels(rawProvider) : [];
+  for (const model of models) {
+    const modelId = stringValue(model.id, "");
+    if (modelId)
+      updateEnabledModelReference(settings, modelReference(providerId, modelId));
+  }
+  omitKey(value.providers, providerId);
+}
+
 function modelToJson(draft: ModelDraft): JsonObject {
   const model: JsonObject = {
     contextWindow: draft.contextWindow,
