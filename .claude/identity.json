@@ -1,14 +1,14 @@
 {
-  "version": "2.0",
+  "createdAt": "2026-09-05T23:19:20.069Z",
+  "suggestedBy": "ecc-tools-repo-analysis",
   "technicalLevel": "technical",
-  "preferredStyle": {
-    "verbosity": "detailed",
-    "codeComments": true,
-    "explanations": true
-  },
+  "version": "2.0",
   "domains": [
     "typescript"
   ],
-  "suggestedBy": "ecc-tools-repo-analysis",
-  "createdAt": "2026-09-05T23:19:20.069Z"
+  "preferredStyle": {
+    "codeComments": true,
+    "explanations": true,
+    "verbosity": "detailed"
+  }
 }
